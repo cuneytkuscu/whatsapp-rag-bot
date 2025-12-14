@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+jinja2
+supabase
+langchain
+langchain-groq
+langchain-community
+langchain-huggingface
+requests
+python-dotenv
+pypdf
+sentence-transformers
