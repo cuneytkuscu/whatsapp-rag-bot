@@ -1,5 +1,5 @@
 # Python 3.11 Slim imajını kullan (Hafif ve hızlı)
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Çalışma dizinini ayarla
 WORKDIR /app
