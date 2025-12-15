@@ -6,8 +6,9 @@ supabase
 langchain
 langchain-groq
 langchain-community
-langchain-huggingface
+langchain-text-splitters
 requests
 python-dotenv
 pypdf
+tiktoken
 sentence-transformers
