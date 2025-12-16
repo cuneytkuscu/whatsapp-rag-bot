@@ -8,14 +8,15 @@ import json
 import requests
 from dotenv import load_dotenv
 
-# Supabase ve LangChain
+# Supabase ve LangChain (v0.1.20 Uyumlu)
 from supabase import create_client, Client
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# DÜZELTME: Eski ama çalışan import adresine döndük
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import SupabaseVectorStore
-# BURASI DEĞİŞTİ: Ağır HuggingFace yerine Hafif FastEmbed
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
+# DÜZELTME: Chains modülü v0.1.20 sürümünde buradadır
 from langchain.chains import RetrievalQA
 from langchain.schema import Document
 
@@ -34,11 +35,9 @@ EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY")
 # Supabase İstemcisi
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Yapay Zeka Modelleri (Lightweight Setup)
-# Embeddings: Metinleri sayıya çeviren motor (CPU dostu)
+# Yapay Zeka Modelleri (CPU Dostu FastEmbed + Groq)
 embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
 
-# LLM: Cevap veren beyin (Groq - Llama 3)
 llm = ChatGroq(
     temperature=0,
     model_name="llama-3.3-70b-versatile",
@@ -68,7 +67,6 @@ html_template = """
             <h3>🤖 WhatsApp Bot Yönetim Paneli</h3>
         </div>
         <div class="card-body">
-            
             <div class="mb-4">
                 <h5>📁 Yeni Bilgi Yükle (PDF)</h5>
                 <form action="/upload" method="post" enctype="multipart/form-data" class="d-flex gap-2">
@@ -76,9 +74,7 @@ html_template = """
                     <button type="submit" class="btn btn-success">Yükle ve Öğret</button>
                 </form>
             </div>
-            
             <hr>
-
             <div class="mb-4">
                 <h5>📞 İzinli Kişiler (Whitelist)</h5>
                 <form action="/add-phone" method="post" class="d-flex gap-2 mb-3">
@@ -86,7 +82,6 @@ html_template = """
                     <input type="text" name="name" placeholder="Ad Soyad" class="form-control">
                     <button type="submit" class="btn btn-primary">Ekle</button>
                 </form>
-                
                 <ul class="list-group">
                     {% for p in whitelist %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -96,7 +91,6 @@ html_template = """
                     {% endfor %}
                 </ul>
             </div>
-
         </div>
     </div>
 </div>
@@ -106,20 +100,19 @@ html_template = """
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_panel(request: Request):
-    # İzinli kişileri çek
-    response = supabase.table("whitelist").select("*").execute()
-    whitelist = response.data
-    
-    # HTML'i render et (Basit Jinja2 kullanımı)
+    try:
+        response = supabase.table("whitelist").select("*").execute()
+        whitelist = response.data
+    except:
+        whitelist = []
     from jinja2 import Template
     t = Template(html_template)
     return t.render(whitelist=whitelist)
 
 @app.post("/upload")
 async def upload_file(file: bytes =  Depends(lambda: None)): 
-    # Not: Bu kısım cPanel/Coolify dosya sistemi farkından dolayı
-    # basitleştirilmiştir. Gerçek senaryoda `UploadFile` kullanılmalı.
-    return {"status": "Demo modunda dosya yükleme simule edildi. Dosya işleme mantığı eklenecek."}
+    # Demo modunda
+    return {"status": "Dosya yükleme simülasyonu başarılı."}
 
 @app.post("/add-phone")
 async def add_phone(phone: str = Form(...), name: str = Form(...)):
@@ -133,7 +126,6 @@ async def whatsapp_webhook(request: Request):
         data = await request.json()
         print("Gelen Veri:", data)
         
-        # Evolution API veri yapısına göre ayrıştırma
         event_type = data.get("event")
         if event_type != "messages.upsert":
             return {"status": "ignored"}
@@ -145,7 +137,7 @@ async def whatsapp_webhook(request: Request):
         if not text_body:
             return {"status": "no text"}
 
-        # 1. Kontrol: Whitelist
+        # 1. Whitelist Kontrolü
         user_check = supabase.table("whitelist").select("*").eq("phone_number", sender).execute()
         if not user_check.data:
             print(f"Yetkisiz numara: {sender}")
@@ -154,12 +146,11 @@ async def whatsapp_webhook(request: Request):
         user_info = user_check.data[0]
         trigger = user_info.get("trigger_word", "@siri")
         
-        # 2. Kontrol: Tetikleyici Kelime
+        # 2. Tetikleyici Kelime Kontrolü
         if not text_body.strip().lower().startswith(trigger.lower()):
             print("Tetikleyici kelime yok.")
             return {"status": "no trigger"}
             
-        # Temiz soru (Tetikleyiciyi at)
         query = text_body[len(trigger):].strip()
         
         # 3. RAG: Cevap Üret
@@ -170,13 +161,10 @@ async def whatsapp_webhook(request: Request):
         )
         ai_response = qa_chain.run(query)
         
-        # 4. Yanıtı Gönder (Evolution API)
+        # 4. Yanıtı Gönder
         send_url = f"{EVOLUTION_API_URL}/message/sendText/{data.get('instance')}"
         headers = {"apikey": EVOLUTION_API_KEY}
-        payload = {
-            "number": sender,
-            "text": ai_response
-        }
+        payload = {"number": sender, "text": ai_response}
         requests.post(send_url, json=payload, headers=headers)
         
         return {"status": "sent", "response": ai_response}
